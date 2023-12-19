@@ -24,8 +24,8 @@ module attributes { transform.with_named_sequence } {
     // Promote query and output operands
     // ==========================================
     %attention3 = transform.structured.match ops{["iree_linalg_ext.attention"]} in %variant_op : (!transform.any_op) -> !transform.any_op
-    %promoted_attention, %alloc_a0, %alloc_a1 = transform.iree.promote_operands %attention3 [0, 3]
-      : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op)
+    %promoted_attention, %alloc_a0 = transform.iree.promote_operands %attention3 [3]
+      : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     // Tile and decompose attention
     // ==========================================
@@ -184,6 +184,8 @@ module attributes { transform.with_named_sequence } {
     //    transform.apply_patterns.canonicalization
     //  } : !transform.any_op
     //transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
+
+    transform.print %variant_op_3 : !transform.any_op
 
     transform.yield
   }
