@@ -1,3 +1,37 @@
+// First Matmul
+// A: 64x128
+// B: 32x128 MMT
+// C: 64x32
+#layout_a1 = #iree_vector_ext.layout<
+  <[BATCHX, LANEX], [4, 16]>,
+  <[BATCHY, LANEY, VECTORX], [8, 4, 4]>
+>
+#layout_b1 = #iree_vector_ext.layout<
+  <[BATCHX, LANEX], [2, 16]>,
+  <[BATCHY, LANEY, VECTORX], [8, 4, 4]>
+>
+#layout_c1 = #iree_vector_ext.layout<
+  <[BATCHX, LANEY, VECTORX], [4, 4, 4]>,
+  <[BATCHY, LANEX], [2, 16]>
+>
+ 
+// Second Matmul
+// A: 128x64
+// B: 64x32  MM
+// C: 128x32
+#layout_a2 = #iree_vector_ext.layout<
+  <[BATCHX, LANEX], [8, 16]>,
+  <[BATCHY, LANEY, VECTORX], [4, 4, 4]>
+>
+#layout_b2 = #iree_vector_ext.layout<
+  <[BATCHX, LANEY, VECTORX], [4, 4, 4]>,
+  <[BATCHY, LANEX], [2, 16]>
+>
+#layout_c2 = #iree_vector_ext.layout<
+  <[BATCHX, LANEY, VECTORX], [8, 4, 4]>,
+  <[BATCHY, LANEX], [2, 16]>
+>
+
 module attributes { transform.with_named_sequence } {
   transform.named_sequence @codegen(%variant_op: !transform.any_op {transform.consumed}) {
     // Get attention op
@@ -19,7 +53,7 @@ module attributes { transform.with_named_sequence } {
     transform.apply_patterns to %top_level_func {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %top_level_func : !transform.any_op
+    transform.apply_cse to %top_level_func : !transform.any_op
 
     // Promote query and output operands
     // ==========================================
@@ -53,31 +87,31 @@ module attributes { transform.with_named_sequence } {
     %f1, %loop1 = transform.structured.fuse_into_containing_op %truncate into %loop0 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     %func = transform.structured.match ops{["func.func"]} in %variant_op : (!transform.any_op) -> !transform.any_op
-    transform.iree.apply_cse %func : !transform.any_op
+    transform.apply_cse to %func : !transform.any_op
 
     %loop4 = transform.loop.fuse_sibling %forall_reduce into %loop1 : (!transform.any_op, !transform.any_op) -> !transform.any_op
-    transform.iree.apply_cse %func : !transform.any_op
+    transform.apply_cse to %func : !transform.any_op
 
     %f5_1, %loop5_1 = transform.structured.fuse_into_containing_op %update into %loop4 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
-    transform.iree.apply_cse %func : !transform.any_op
+    transform.apply_cse to %func : !transform.any_op
 
     %f5, %loop5 = transform.structured.fuse_into_containing_op %scale_factor into %loop5_1 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
     %f6, %loop6 = transform.structured.fuse_into_containing_op %partial_softmax into %loop5 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
-    transform.iree.apply_cse %func : !transform.any_op
+    transform.apply_cse to %func : !transform.any_op
 
     %f7, %loop7 = transform.structured.fuse_into_containing_op %reduce_max into %loop6 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
     %f8, %loop8 = transform.structured.fuse_into_containing_op %promoted_first_matmul into %loop7 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
     transform.apply_patterns to %func {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %func : !transform.any_op
+    transform.apply_cse to %func : !transform.any_op
 
     %f9, %loop9 = transform.structured.fuse_into_containing_op %fill_op into %loop8 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     transform.apply_patterns to %func {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %func : !transform.any_op
+    transform.apply_cse to %func : !transform.any_op
 
     // Distribute fills
     // ==========================================
@@ -92,7 +126,7 @@ module attributes { transform.with_named_sequence } {
     transform.apply_patterns to %func {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %func : !transform.any_op
+    transform.apply_cse to %func : !transform.any_op
 
     // Vectorize function
     // ==========================================
@@ -112,7 +146,7 @@ module attributes { transform.with_named_sequence } {
       transform.apply_patterns.linalg.tiling_canonicalization
       transform.apply_patterns.scf.for_loop_canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %func_3 : !transform.any_op
+    transform.apply_cse to %func_3 : !transform.any_op
     transform.iree.eliminate_empty_tensors %variant_op : (!transform.any_op) -> ()
     transform.apply_patterns to %func_3 { transform.apply_patterns.linalg.erase_unnecessary_inputs } : !transform.any_op
     %variant_op_3 = transform.iree.bufferize { target_gpu } %variant_op : (!transform.any_op) -> (!transform.any_op)
@@ -121,10 +155,8 @@ module attributes { transform.with_named_sequence } {
     // ===========================================================================
     %func_2 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
     transform.apply_patterns to %func_2 {
-      transform.apply_patterns.iree.prepare_vector_to_mma
-      transform.apply_patterns.iree.fold_extf_into_contraction
+      transform.apply_patterns.iree.fold_arith_ext_into_contraction
     } : !transform.any_op
-    %reordered_func = transform.iree.reorder_transpose %func_2 : (!transform.any_op) -> !transform.any_op
 
     // Step 6. Post-bufferization vector distribution
     // ===========================================================================
@@ -139,32 +171,45 @@ module attributes { transform.with_named_sequence } {
     transform.apply_patterns to %func_7 {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %func_7 : !transform.any_op
+    transform.apply_cse to %func_7 : !transform.any_op
     %func_8 = transform.structured.hoist_redundant_vector_transfers %func_7
     : (!transform.any_op) -> !transform.any_op
     transform.apply_patterns to %func_8 {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %func_8 : !transform.any_op
+    transform.apply_cse to %func_8 : !transform.any_op
     transform.memref.erase_dead_alloc_and_stores %func_8 : (!transform.any_op) -> ()
 
-    // Step 7. SIMD -> SIMT Using layouts
-    // ===========================================================================
-    %func_9 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-    transform.apply_patterns to %func_9 {
-      transform.apply_patterns.iree.prepare_vector_for_chained_mfma
-      transform.apply_patterns.iree.propagate_transpose
+    // Apply chained matmul optimization.
+    transform.apply_registered_pass "iree-amdgpu-prepare-chained-matmul" to %func_8 : (!transform.any_op) -> (!transform.any_op)
+
+    // Get the vector.contract ops.
+    %contracts = transform.structured.match ops{["vector.contract"]} in %variant_op_3 :  (!transform.any_op) -> !transform.any_op
+    %contract1, %contract2 = transform.split_handle %contracts : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+
+    %layoutA1 = transform.param.constant #layout_a1 -> !transform.any_param
+    %layoutB1 = transform.param.constant #layout_b1 -> !transform.any_param
+    %layoutC1 = transform.param.constant #layout_c1 -> !transform.any_param
+
+    %layoutA2 = transform.param.constant #layout_a2 -> !transform.any_param
+    %layoutB2 = transform.param.constant #layout_b2 -> !transform.any_param
+    %layoutC2 = transform.param.constant #layout_c2 -> !transform.any_param
+
+    transform.annotate %contract1 "__vector_layout_test_anchor_operand_0" = %layoutA1 : !transform.any_op, !transform.any_param
+    transform.annotate %contract1 "__vector_layout_test_anchor_operand_1" = %layoutB1 : !transform.any_op, !transform.any_param
+    transform.annotate %contract1 "__vector_layout_test_anchor_operand_2" = %layoutC1 : !transform.any_op, !transform.any_param
+
+    transform.annotate %contract2 "__vector_layout_test_anchor_operand_0" = %layoutA2 : !transform.any_op, !transform.any_param
+    transform.annotate %contract2 "__vector_layout_test_anchor_operand_1" = %layoutB2 : !transform.any_op, !transform.any_param
+    transform.annotate %contract2 "__vector_layout_test_anchor_operand_2" = %layoutC2 : !transform.any_op, !transform.any_param
+
+    %distribute_func = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+    transform.iree.test_amdgpu_contraction_distribution %distribute_func : !transform.any_op
+
+    transform.apply_patterns to %distribute_func {
+      transform.apply_patterns.canonicalization
     } : !transform.any_op
-    transform.iree.apply_cse %func_9 : !transform.any_op
-    transform.apply_patterns to %func_9 {
-      transform.apply_patterns.iree.fold_transpose_contract
-      transform.apply_patterns.iree.propagate_transpose
-    } : !transform.any_op
-    transform.apply_patterns to %func_9 {
-      transform.apply_patterns.iree.apply_transfer_write_patterns
-      //transform.apply_patterns.iree.apply_reordering_patterns
-    } : !transform.any_op
-    %transformed_func = transform.iree.simt_vector_distribution %func_9 : (!transform.any_op) -> (!transform.any_op)
+    transform.apply_cse to %distribute_func : !transform.any_op
 
     // Distribute shared memory copies
     // ==========================================
@@ -175,31 +220,9 @@ module attributes { transform.with_named_sequence } {
         transform.apply_patterns.canonicalization
         transform.apply_patterns.linalg.tiling_canonicalization
       } : !transform.any_op
-    transform.iree.apply_cse %func_10 : !transform.any_op
+    transform.apply_cse to %func_10 : !transform.any_op
 
-    // Swizzle shared memory
-    // ==========================================
-    %func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-    transform.apply_patterns to %func_20 {
-        transform.apply_patterns.memref.fold_memref_alias_ops
-        transform.apply_patterns.canonicalization
-      } : !transform.any_op
-    transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
-
-    // Do multi-buffering (num_buffers = pipeline_depth + 1 for loadStoreStage0 (strategy = 1))
-    // For now, pipeline depth = 1
-    // ==========================================
-    //%func_4 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-    //transform.iree.gpu_multi_buffering %func_4 {num_buffers = 2, skip_override_analysis = true} : (!transform.any_op) -> ()
-    //transform.apply_patterns to %func_4 {
-    //    transform.apply_patterns.memref.fold_memref_alias_ops
-    //    transform.apply_patterns.canonicalization
-    //  } : !transform.any_op
-
-    // Do pipelining
-    // ==========================================
-    //%for_op = transform.structured.match ops{["scf.for"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-    //%pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 1, strategy = 1, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
+    transform.print %variant_op_3 : !transform.any_op
 
     transform.yield
   }
