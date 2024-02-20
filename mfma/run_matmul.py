@@ -117,6 +117,10 @@ def compile(args):
             "--iree-codegen-use-transform-dialect-strategy=codegen",
             f"--iree-codegen-transform-dialect-library={args.spec_file}",
         ]
+    if args.vector_distribution:
+        command += [
+            "--iree-codegen-llvmgpu-use-vector-distribution",
+        ]
     if args.exec_dump:
         command += [f'--iree-hal-dump-executable-binaries-to={os.getcwd()}/tmp']
     if args.dump:
@@ -150,7 +154,7 @@ def validate(args):
     with open(rhs_filename, "wb") as f:
         np.save(f, rhs.astype("float16"))
     output_filename = f"output_m{args.m}_n{args.n}_k{args.k}.npy"
-    if args.chip == "gfx90a":
+    if args.chip == "gfx90a" or args.chip == "gfx940":
         output = output.astype("float32")
     with open(output_filename, "wb") as f:
         np.save(f, output)
@@ -230,6 +234,9 @@ parser.add_argument(
 parser.add_argument(
     "-t", "--transform_dialect", action="store_true", help="Use td script"
 )
+parser.add_argument(
+    "-vd", "--vector-distribution", action="store_true", help="Use vector distribution pipeline"
+)
 parser.add_argument("-v", "--vulkan", action="store_true", help="Use vulkan backend")
 parser.add_argument(
     "-f",
@@ -243,11 +250,11 @@ parser.add_argument(
 parser.add_argument(
     "-x",
     "--chip",
-    choices=["gfx1100", "gfx90a"],
+    choices=["gfx1100", "gfx90a", "gfx940"],
     default="gfx90a",
     nargs="?",
     const="mtm",
-    help="Supported chips = gfx1100, gfx90a",
+    help="Supported chips = gfx1100, gfx90a, gfx940",
 )
 parser.add_argument(
     "-ib", "--iree_build", default="../iree-build", help="Path to iree-built directory."
