@@ -88,7 +88,6 @@ def create_mlir(args):
 def get_td_flags(args):
     return [
       '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false',\
-      '--iree-codegen-use-transform-dialect-strategy=codegen',\
       f'--iree-codegen-transform-dialect-library={args.spec_file}'
     ]
 
